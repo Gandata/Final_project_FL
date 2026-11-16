@@ -9,9 +9,9 @@ Implementation of **FIRST and FOLLOW sets** (Item 1), **Table-Driven Predictive 
 
 ## Group Members
 
-- **[Member 1 Full Name]** — `<student_email_1@eafit.edu.co>`
-- **[Member 2 Full Name]** — `<student_email_2@eafit.edu.co>`
-- **[Member 3 Full Name]** — `<student_email_3@eafit.edu.co>`
+- **Jesús Ricardo Gandica Velasco** — `<jrgandicav@eafit.edu.co>`
+- **Sara Arboleda Quintero** — `<sarboledq1@eafit.edu.co>`
+- **Sergio Tomas Rincon Jaimes** — `<strinconj@eafit.edu.co>`
 
 ---
 
