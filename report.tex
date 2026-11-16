@@ -1,0 +1,523 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-nodecimaldot,es-tabla]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc}
+
+\geometry{margin=2.4cm}
+
+\definecolor{codebg}{HTML}{F8FAFC}
+\definecolor{codeframe}{HTML}{CBD5E1}
+\definecolor{accentblue}{HTML}{1D4ED8}
+\definecolor{accentgreen}{HTML}{15803D}
+\definecolor{accentred}{HTML}{B91C1C}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    breaklines=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false
+}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=accentblue,
+    urlcolor=accentblue,
+    citecolor=accentblue
+}
+
+\title{\textbf{Proyecto Final: Analizadores Sint\'acticos $LL(1)$ y $SLR(1)$, y Evaluaci\'on de Definiciones Dirigidas por la Sintaxis (SDD)}\\[0.4em]
+\large SI2002 Lenguajes Formales $\cdot$ ST0270 Lenguajes Formales y Compiladores $\cdot$ CM0081 Lenguajes Formales y Aut\'omatas}
+\author{Integrante 1 \and Integrante 2 \and Integrante 3}
+\date{Noviembre de 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+En este informe se documenta el dise\~no, la implementaci\'on desde cero (utilizando exclusivamente la librer\'ia est\'andar de Python) y la verificaci\'on experimental de los algoritmos de an\'alisis sint\'actico y traducci\'on dirigida por la sintaxis descritos en los Cap\'itulos 4 y 5 de Aho, Lam, Sethi y Ullman (\textit{Compilers: Principles, Techniques, and Tools}, 2da Edici\'on). El sistema comprende: (1) el c\'alculo por punto fijo de los conjuntos $\text{FIRST}(\cdot)$ y $\text{FOLLOW}(\cdot)$, (2) la construcci\'on de tablas y motores de an\'alisis sint\'actico predictivo $LL(1)$ y ascendente $SLR(1)$, y (3) un evaluador general de Definiciones Dirigidas por la Sintaxis (SDD) basado en grafos de dependencias y ordenamiento topol\'ogico con detecci\'on de ciclos.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% =============================================================================
+\section{Secciones y Algoritmos del Libro Seguidos y Estructuras de Datos}
+% =============================================================================
+
+\subsection{Correspondencia con el Libro de Aho et al. (2da Edici\'on)}
+Cada componente del archivo principal \texttt{main.py} sigue fielmente las definiciones, figuras y algoritmos de los Cap\'itulos 4 y 5 del libro de texto:
+
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{@{}llp{7.2cm}@{}}
+\toprule
+\textbf{\'Item} & \textbf{Secci\'on / Algoritmo (Aho et al.)} & \textbf{Funci\'on en \texttt{main.py} y Prop\'osito} \\
+\midrule
+\'Item 1 & Secci\'on 4.4.2 (p\'ags. 220--222) & \texttt{compute\_first\_sets}, \texttt{compute\_first\_of\_string}: C\'alculo de $\text{FIRST}(X)$ y extensi\'on a cadenas $\alpha = X_1 X_2 \dots X_n$. \\
+\'Item 1 & Secci\'on 4.4.2 (p\'ags. 221--222) & \texttt{compute\_follow\_sets}: C\'alculo por punto fijo de $\text{FOLLOW}(A)$ para todos los no terminales. \\
+\'Item 2 ($LL$) & Secci\'on 4.4.3, Algoritmo 4.31 (p\'ag. 224) & \texttt{build\_ll1\_table}: Construcci\'on de la tabla predictiva $M[A,a]$ y verificaci\'on de ausencia de conflictos $LL(1)$. \\
+\'Item 2 ($LL$) & Secci\'on 4.4.4, Algoritmo 4.34 / Fig. 4.20 (p\'ag. 227) & \texttt{parse\_ll1}: Analizador predictivo no recursivo controlado por pila expl\'icita y tabla $M[A,a]$. \\
+\'Item 2 ($SLR$) & Secci\'on 4.6.2, Figs. 4.32 y 4.33 (p\'ags. 245--246) & \texttt{closure}, \texttt{goto}, \texttt{build\_canonical\_collection}: Cerradura de \'items $LR(0)$, funci\'on $\text{GOTO}(I,X)$ y colecci\'on can\'onica $C = \{I_0, \dots, I_n\}$. \\
+\'Item 2 ($SLR$) & Secci\'on 4.6.4, Algoritmo 4.46 (p\'ags. 253--254) & \texttt{build\_slr\_table}: Construcci\'on de las tablas $\text{ACTION}[i,a]$ y $\text{GOTO}[i,A]$ usando $\text{FOLLOW}(A)$ y detecci\'on de conflictos \textit{shift/reduce} y \textit{reduce/reduce}. \\
+\'Item 2 ($SLR$) & Secci\'on 4.6.3, Algoritmo 4.44 / Fig. 4.36 (p\'ags. 250--251) & \texttt{parse\_slr1}: Motor de an\'alisis sint\'actico $LR$ con pila de estados. \\
+\'Item 3 (SDD) & Secciones 5.1.1 y 5.1.2 (p\'ags. 304--309) & \texttt{SemanticRule}, \texttt{SDD}, \texttt{ParseNode}: Representaci\'on declarativa de la SDD como datos y construcci\'on del \'arbol de parseo. \\
+\'Item 3 (SDD) & Secci\'on 5.2.1 (p\'ags. 310--312) & \texttt{build\_dependency\_graph}: Instanciaci\'on de reglas sem\'anticas y creaci\'on de aristas dirigidas desde el atributo usado hacia el atributo definido. \\
+\'Item 3 (SDD) & Secci\'on 5.2.2 (p\'ag. 312) & \texttt{topological\_sort}, \texttt{evaluate\_sdd\_on\_tree}: Ordenamiento topol\'ogico, detecci\'on de SDD circular y evaluaci\'on de atributos. \\
+\bottomrule
+\end{tabular}
+\caption{Trazabilidad exacta entre el libro de Aho et al. (2da Ed.) y la implementaci\'on.}
+\end{table}
+
+\subsection{Estructuras de Datos Utilizadas}
+\begin{enumerate}
+    \item \textbf{Gram\'atica (\texttt{Grammar})}: Almacena la lista ordenada de no terminales (\texttt{list[str]}), el conjunto de terminales (\texttt{set[str]}), un diccionario de alternativas por no terminal (\texttt{dict[str, list[str]]}) y la lista plana de producciones \texttt{production\_list} (\texttt{list[tuple[str, str]]}).
+    \item \textbf{Conjuntos $\text{FIRST}$ y $\text{FOLLOW}$}: Diccionarios \texttt{dict[str, set[str]]} que asocian cada s\'imbolo gramatical con un conjunto nativo de Python, garantizando inserciones en $O(1)$ y verificaci\'on inmediata de convergencia en el bucle de punto fijo.
+    \item \textbf{Tabla Predictiva $LL(1)$ (\texttt{LL1Table})}: Diccionario \texttt{dict[tuple[str, str], list[tuple[str, str]]]} indexado por pares $(A, a)$. Cada celda almacena una \emph{lista} de producciones para detectar entradas m\'ultiplemente definidas ($\text{len}(M[A,a]) > 1$).
+    \item \textbf{\'Items y Estados $LR(0)$}: Cada \'item $LR(0)$ $[A \to \alpha \cdot \beta]$ se modela como una tupla inmutable \texttt{(head, body, dot\_pos)} (\texttt{tuple[str, str, int]}). Un estado $I_i$ es un \texttt{frozenset[LR0Item]}, lo cual permite indexar estados en un diccionario \texttt{dict[frozenset[LR0Item], int]} durante la construcci\'on de la colecci\'on can\'onica sin duplicar estados equivalentes.
+    \item \textbf{Tablas $SLR(1)$ (\texttt{SLRActionTable} y \texttt{SLRGotoTable})}: \texttt{action\_table} mapea $(i, a)$ a una lista de acciones \texttt{("shift", j)}, \texttt{("reduce", (A, body))} o \texttt{("accept", None)} para detectar cualquier conflicto; \texttt{goto\_table} mapea $(i, A)$ al estado destino $j$.
+    \item \textbf{\'Arbol de An\'alisis Sint\'actico (\texttt{ParseNode}) y Grafo de Dependencias (\texttt{DependencyGraph})}: Cada \texttt{ParseNode} guarda su s\'imbolo, la producci\'on aplicada, la lista de hijos, un diccionario \texttt{attributes} y su identificador \'unico en preorden \texttt{node\_id}. El grafo de dependencias representa cada instancia de atributo como el v\'ertice \texttt{(node\_id, attr\_name)} y almacena las aristas dirigidas \texttt{edges} junto con la regla sem\'antica asociada a cada v\'ertice.
+\end{enumerate}
+
+% =============================================================================
+\section{\'Items 1 y 2: An\'alisis Completo de una Gram\'atica Propia}
+% =============================================================================
+
+Consideremos la siguiente gram\'atica libre de contexto propia $G_1$ (que no aparece en los ejemplos del enunciado ni del libro, y que tambi\'en emplearemos como base sint\'actica en el \'Item 3). La gram\'atica describe expresiones de suma de bloques num\'ericos con un operador prefijo de escalado \texttt{\^{}}:
+
+\begin{lstlisting}
+3
+S -> BR
+R -> +BR e
+B -> ^B 2 3
+\end{lstlisting}
+
+Las producciones numeradas de la gram\'atica aumentada $G_1'$ son:
+\[
+(0)\ S' \to S \qquad
+(1)\ S \to B R \qquad
+(2)\ R \to + B R \qquad
+(3)\ R \to \varepsilon \qquad
+(4)\ B \to \text{\^{}} B \qquad
+(5)\ B \to 2 \qquad
+(6)\ B \to 3
+\]
+
+\subsection{Conjuntos $\text{FIRST}$ y $\text{FOLLOW}$ (\'Item 1)}
+Al ejecutar \texttt{uv run python main.py --sets} sobre $G_1$, el programa calcula e imprime en orden alfab\'etico de no terminales y orden ASCII de terminales:
+
+\begin{lstlisting}
+First(B) = {2, 3, ^}
+First(R) = {+, e}
+First(S) = {2, 3, ^}
+Follow(B) = {+, $}
+Follow(R) = {$}
+Follow(S) = {$}
+\end{lstlisting}
+
+\subsection{Tabla Predictiva $LL(1)$ (\'Item 2 — Parte A)}
+Aplicando el \textbf{Algoritmo 4.31} (p\'ag. 224), se obtiene la Tabla~\ref{tab:ll1}. Como ninguna celda $M[A,a]$ posee m\'as de una producci\'on, la gram\'atica $G_1$ \textbf{es $LL(1)$}.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}c|ccccc@{}}
+\toprule
+\textbf{No Terminal} & \texttt{+} & \texttt{2} & \texttt{3} & \texttt{\^{}} & \texttt{\$} \\
+\midrule
+$S$ & & $S \to BR$ & $S \to BR$ & $S \to BR$ & \\
+$R$ & $R \to +BR$ & & & & $R \to e$ \\
+$B$ & & $B \to 2$ & $B \to 3$ & $B \to \text{\^{}}B$ & \\
+\bottomrule
+\end{tabular}
+\caption{Tabla de an\'alisis sint\'actico predictivo $LL(1)$ calculada para $G_1$.}
+\label{tab:ll1}
+\end{table}
+
+\subsection{Aut\'omata Can\'onico $LR(0)$ y Tabla $SLR(1)$ (\'Item 2 — Parte B)}
+Al ejecutar \texttt{build\_canonical\_collection} (Figura 4.33, p\'ag. 246), se obtienen 11 estados can\'onicos $I_0, \dots, I_{10}$. En la Figura~\ref{fig:lr0} se presenta el aut\'omata $LR(0)$ completo y en la Tabla~\ref{tab:slr1} la tabla $SLR(1)$ ($\text{ACTION}$ y $\text{GOTO}$) generada por el \textbf{Algoritmo 4.46} (p\'ag. 253). Como no existen conflictos \textit{shift/reduce} ni \textit{reduce/reduce}, $G_1$ \textbf{tambi\'en es $SLR(1)$}.
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[
+    state/.style={
+        rectangle, rounded corners=2pt, draw=black!80, fill=codebg,
+        font=\ttfamily\scriptsize, align=left, inner sep=4pt
+    },
+    edge_lbl/.style={font=\ttfamily\scriptsize, fill=white, inner sep=1pt},
+    >=Stealth, node distance=1.4cm and 1.8cm
+]
+\node[state] (I0) {\textbf{I0}\\S' -> .S\\S -> .BR\\B -> .\^{}B\\B -> .2\\B -> .3};
+\node[state, above right=0.8cm and 2.0cm of I0] (I1) {\textbf{I1}\\S' -> S.};
+\node[state, right=2.0cm of I0] (I2) {\textbf{I2}\\S -> B.R\\R -> .+BR\\R -> .};
+\node[state, below right=0.8cm and 2.0cm of I0] (I5) {\textbf{I5}\\B -> \^{}.B\\B -> .\^{}B\\B -> .2\\B -> .3};
+\node[state, below=1.1cm of I0] (I3) {\textbf{I3}\\B -> 2.};
+\node[state, left=1.4cm of I3] (I4) {\textbf{I4}\\B -> 3.};
+
+\node[state, above right=0.5cm and 2.0cm of I2] (I6) {\textbf{I6}\\S -> BR.};
+\node[state, right=2.0cm of I2] (I7) {\textbf{I7}\\R -> +.BR\\B -> .\^{}B\\B -> .2\\B -> .3};
+\node[state, right=2.0cm of I5] (I8) {\textbf{I8}\\B -> \^{}B.};
+
+\node[state, right=2.0cm of I7] (I9) {\textbf{I9}\\R -> +B.R\\R -> .+BR\\R -> .};
+\node[state, above=1.0cm of I9] (I10) {\textbf{I10}\\R -> +BR.};
+
+\draw[->] (I0) -- node[edge_lbl, above left] {S} (I1);
+\draw[->] (I0) -- node[edge_lbl, above] {B} (I2);
+\draw[->] (I0) -- node[edge_lbl, below left] {\^{}} (I5);
+\draw[->] (I0) -- node[edge_lbl, right] {2} (I3);
+\draw[->] (I0) -- node[edge_lbl, above left] {3} (I4);
+
+\draw[->] (I2) -- node[edge_lbl, above left] {R} (I6);
+\draw[->] (I2) -- node[edge_lbl, above] {+} (I7);
+
+\draw[->] (I5) -- node[edge_lbl, above] {B} (I8);
+\draw[->] (I5) edge[loop below] node[edge_lbl] {\^{}} (I5);
+\draw[->] (I5) -- node[edge_lbl, below] {2} (I3);
+\draw[->] (I5.south west) to[bend left=18] node[edge_lbl, below] {3} (I4.south east);
+
+\draw[->] (I7) -- node[edge_lbl, above] {B} (I9);
+\draw[->] (I7) -- node[edge_lbl, left] {\^{}} (I5);
+\draw[->] (I7.south) to[bend left=22] node[edge_lbl, below] {2} (I3.east);
+\draw[->] (I7.south) to[bend left=28] node[edge_lbl, below] {3} (I4.south);
+
+\draw[->] (I9) -- node[edge_lbl, right] {R} (I10);
+\draw[->] (I9.north) to[bend right=25] node[edge_lbl, above] {+} (I7.north);
+\end{tikzpicture}
+\caption{Aut\'omata Can\'onico $LR(0)$ para la gram\'atica $G_1$.}
+\label{fig:lr0}
+\end{figure}
+
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{@{}c|ccccc|ccc@{}}
+\toprule
+& \multicolumn{5}{c|}{\textbf{ACTION}} & \multicolumn{3}{c}{\textbf{GOTO}} \\
+\textbf{Estado} & \texttt{+} & \texttt{2} & \texttt{3} & \texttt{\^{}} & \texttt{\$} & $S$ & $R$ & $B$ \\
+\midrule
+$0$ & & \texttt{s3} & \texttt{s4} & \texttt{s5} & & $1$ & & $2$ \\
+$1$ & & & & & \texttt{acc} & & & \\
+$2$ & \texttt{s7} & & & & \texttt{r3} ($R \to e$) & & $6$ & \\
+$3$ & \texttt{r5} ($B \to 2$) & & & & \texttt{r5} ($B \to 2$) & & & \\
+$4$ & \texttt{r6} ($B \to 3$) & & & & \texttt{r6} ($B \to 3$) & & & \\
+$5$ & & \texttt{s3} & \texttt{s4} & \texttt{s5} & & & & $8$ \\
+$6$ & & & & & \texttt{r1} ($S \to BR$) & & & \\
+$7$ & & \texttt{s3} & \texttt{s4} & \texttt{s5} & & & & $9$ \\
+$8$ & \texttt{r4} ($B \to \text{\^{}}B$) & & & & \texttt{r4} ($B \to \text{\^{}}B$) & & & \\
+$9$ & \texttt{s7} & & & & \texttt{r3} ($R \to e$) & & $10$ & \\
+$10$ & & & & & \texttt{r2} ($R \to +BR$) & & & \\
+\bottomrule
+\end{tabular}
+\caption{Tabla $SLR(1)$ ($\text{ACTION}$ y $\text{GOTO}$) calculada para $G_1$.}
+\label{tab:slr1}
+\end{table}
+
+\subsection{Traza Paso a Paso del An\'alisis de la Cadena \texttt{\^{}2+3}}
+En las Tablas~\ref{tab:trace_ll1} y~\ref{tab:trace_slr1} se muestran las trazas paso a paso generadas por \texttt{parse\_ll1} y \texttt{parse\_slr1} sobre la cadena de entrada $w = \texttt{\^{}2+3}$.
+
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{@{}c|llp{4.5cm}@{}}
+\toprule
+\textbf{Paso} & \textbf{Pila (Tope izq.)} & \textbf{Entrada Restante} & \textbf{Acci\'on ($LL(1)$)} \\
+\midrule
+1 & \texttt{S\$} & \texttt{\^{}2+3\$} & \texttt{output S -> BR} \\
+2 & \texttt{BR\$} & \texttt{\^{}2+3\$} & \texttt{output B -> \^{}B} \\
+3 & \texttt{\^{}BR\$} & \texttt{\^{}2+3\$} & \texttt{match \^{}} \\
+4 & \texttt{BR\$} & \texttt{2+3\$} & \texttt{output B -> 2} \\
+5 & \texttt{2R\$} & \texttt{2+3\$} & \texttt{match 2} \\
+6 & \texttt{R\$} & \texttt{+3\$} & \texttt{output R -> +BR} \\
+7 & \texttt{+BR\$} & \texttt{+3\$} & \texttt{match +} \\
+8 & \texttt{BR\$} & \texttt{3\$} & \texttt{output B -> 3} \\
+9 & \texttt{3R\$} & \texttt{3\$} & \texttt{match 3} \\
+10 & \texttt{R\$} & \texttt{\$} & \texttt{output R -> e} \\
+11 & \texttt{\$} & \texttt{\$} & \texttt{accept} \\
+\bottomrule
+\end{tabular}
+\caption{Traza predictiva $LL(1)$ (Algoritmo 4.34) para la cadena \texttt{\^{}2+3}.}
+\label{tab:trace_ll1}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{@{}c|lllp{4.2cm}@{}}
+\toprule
+\textbf{Paso} & \textbf{Pila de Estados} & \textbf{S\'imbolos} & \textbf{Entrada} & \textbf{Acci\'on ($SLR(1)$)} \\
+\midrule
+1 & \texttt{0} & \texttt{\$} & \texttt{\^{}2+3\$} & \texttt{shift 5} \\
+2 & \texttt{0 5} & \texttt{\$\^{}} & \texttt{2+3\$} & \texttt{shift 3} \\
+3 & \texttt{0 5 3} & \texttt{\$\^{}2} & \texttt{+3\$} & \texttt{reduce B -> 2} \\
+4 & \texttt{0 5 8} & \texttt{\$\^{}B} & \texttt{+3\$} & \texttt{reduce B -> \^{}B} \\
+5 & \texttt{0 2} & \texttt{\$B} & \texttt{+3\$} & \texttt{shift 7} \\
+6 & \texttt{0 2 7} & \texttt{\$B+} & \texttt{3\$} & \texttt{shift 4} \\
+7 & \texttt{0 2 7 4} & \texttt{\$B+3} & \texttt{\$} & \texttt{reduce B -> 3} \\
+8 & \texttt{0 2 7 9} & \texttt{\$B+B} & \texttt{\$} & \texttt{reduce R -> e} \\
+9 & \texttt{0 2 7 9 10} & \texttt{\$B+BR} & \texttt{\$} & \texttt{reduce R -> +BR} \\
+10 & \texttt{0 2 6} & \texttt{\$BR} & \texttt{\$} & \texttt{reduce S -> BR} \\
+11 & \texttt{0 1} & \texttt{\$S} & \texttt{\$} & \texttt{accept} \\
+\bottomrule
+\end{tabular}
+\caption{Traza ascendente $SLR(1)$ (Algoritmo 4.44) para la cadena \texttt{\^{}2+3}.}
+\label{tab:trace_slr1}
+\end{table}
+
+% =============================================================================
+\section{\'Item 3: Definici\'on Dirigida por la Sintaxis (SDD)}
+% =============================================================================
+
+\subsection{Paso 1: Elecci\'on de la Gram\'atica y Cumplimiento de G1, G2 y G3}
+La gram\'atica $G_{\text{SDD}}$ elegida es:
+\[
+S \to B R \quad \mid \quad R \to + B R \mid \varepsilon \quad \mid \quad B \to \text{\^{}} B \mid 2 \mid 3
+\]
+\begin{itemize}
+    \item \textbf{Cumplimiento de G1}: Sigue todas las convenciones de la Secci\'on 2.2 (\texttt{S} es el s\'imbolo inicial, no terminales en may\'usculas, terminales de un car\'acter, \texttt{e} para $\varepsilon$) y es tanto $LL(1)$ como $SLR(1)$.
+    \item \textbf{Cumplimiento de G2}: Posee \textbf{3 no terminales} ($S, R, B \ge 3$), \textbf{6 producciones} ($\ge 6$) y \textbf{2 no terminales recursivos} ($R \to +BR$ y $B \to \text{\^{}}B$).
+    \item \textbf{Cumplimiento de G3}: Ni la gram\'atica ni la SDD pertenecen al libro de Aho ni al documento gu\'ia. Modela un evaluador de sumas ponderadas por posici\'on donde cada bloque sucesivo en $R$ incrementa su escala base ($\text{scale} + 1$) y cada operador prefijo \texttt{\^{}} duplica la escala heredada ($\text{scale} \times 2$).
+\end{itemize}
+
+\subsection{Paso 2: Tabla de Atributos y Reglas Sem\'anticas}
+En las Tablas~\ref{tab:attrs} y~\ref{tab:rules} se presentan los atributos y las reglas sem\'anticas de la SDD. Se verifica que: (i) existen atributos heredados (\texttt{scale}) y sintetizados (\texttt{val}), (ii) el s\'imbolo inicial $S$ \textbf{no posee atributos heredados}, y (iii) en cada producci\'on todo atributo sintetizado de la cabeza y todo atributo heredado de cada no terminal en el cuerpo se define exactamente una vez.
+
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{@{}llllp{7.2cm}@{}}
+\toprule
+\textbf{S\'imbolo} & \textbf{Atributo} & \textbf{Clase} & \textbf{Tipo} & \textbf{Significado} \\
+\midrule
+$S$ & \texttt{val} & Sintetizado & \texttt{int} & Valor num\'erico total de la expresi\'on ponderada ($S$ no tiene atributos heredados). \\
+$B, R$ & \texttt{scale} & Heredado & \texttt{int} & Factor entero de escala recibido del contexto padre/hermano izquierdo. \\
+$B, R$ & \texttt{val} & Sintetizado & \texttt{int} & Valor num\'erico ponderado evaluado para el sub\'arbol de $B$ o la sublista $R$. \\
+\texttt{2, 3, +, \^{}} & \texttt{lexval} & Sintetizado & \texttt{str} & Car\'acter literal del terminal provisto directamente por el scanner. \\
+\bottomrule
+\end{tabular}
+\caption{Tabla de atributos de la SDD (Paso 2.1).}
+\label{tab:attrs}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Producci\'on} & \textbf{Reglas Sem\'anticas} \\
+\midrule
+$1)\ S \to B\ R$ & $B.\text{scale} = 1$; \quad $R.\text{scale} = B.\text{scale} + 1$; \quad $S.\text{val} = B.\text{val} + R.\text{val}$ \\
+$2)\ R \to +\ B\ R_1$ & $B.\text{scale} = R.\text{scale}$; \quad $R_1.\text{scale} = R.\text{scale} + 1$; \quad $R.\text{val} = B.\text{val} + R_1.\text{val}$ \\
+$3)\ R \to \varepsilon$ & $R.\text{val} = 0$ \\
+$4)\ B \to \text{\^{}}\ B_1$ & $B_1.\text{scale} = B.\text{scale} \times 2$; \quad $B.\text{val} = B_1.\text{val}$ \\
+$5)\ B \to 2$ & $B.\text{val} = \text{int}(2.\text{lexval}) \times B.\text{scale}$ \\
+$6)\ B \to 3$ & $B.\text{val} = \text{int}(3.\text{lexval}) \times B.\text{scale}$ \\
+\bottomrule
+\end{tabular}
+\caption{Reglas sem\'anticas de la SDD en el formato de la Figura 5.1 del libro (Paso 2.2).}
+\label{tab:rules}
+\end{table}
+
+\subsection{Paso 3: Ejemplo Desarrollado a Mano para la Cadena \texttt{\^{}2+3}}
+Elegimos la cadena $w = \texttt{\^{}2+3}$, que consta de \textbf{4 terminales} (\texttt{\^{}}, \texttt{2}, \texttt{+}, \texttt{3}).
+
+\subsubsection{\'Arbol de Parseo Anotado}
+En la Figura~\ref{fig:annotated_tree} se muestra el \'arbol de an\'alisis sint\'actico anotado con los valores de todos los atributos en cada nodo (numerados en preorden del nodo $\#1$ al nodo $\#11$).
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[
+    treenode/.style={
+        rectangle, rounded corners=2pt, draw=black!80, fill=codebg,
+        font=\ttfamily\scriptsize, align=center, inner sep=3.5pt
+    },
+    leafnode/.style={
+        rectangle, rounded corners=2pt, draw=accentblue!80, fill=white,
+        font=\ttfamily\scriptsize, align=center, inner sep=3.5pt
+    },
+    >=Stealth
+]
+\node[treenode] (N1) at (0,0) {\textbf{S} (nodo \#1)\\val = 10};
+
+\node[treenode] (N2) at (-3.5,-1.6) {\textbf{B} (nodo \#2)\\scale = 1, val = 4};
+\node[treenode] (N6) at (3.0,-1.6) {\textbf{R} (nodo \#6)\\scale = 2, val = 6};
+
+\node[leafnode] (N3) at (-5.2,-3.3) {\textbf{\^{}} (nodo \#3)\\lexval = '\^{}'};
+\node[treenode] (N4) at (-2.2,-3.3) {\textbf{B1} (nodo \#4)\\scale = 2, val = 4};
+
+\node[leafnode] (N5) at (-2.2,-4.9) {\textbf{2} (nodo \#5)\\lexval = '2'};
+
+\node[leafnode] (N7) at (0.8,-3.3) {\textbf{+} (nodo \#7)\\lexval = '+'};
+\node[treenode] (N8) at (3.0,-3.3) {\textbf{B} (nodo \#8)\\scale = 2, val = 6};
+\node[treenode] (N10) at (5.4,-3.3) {\textbf{R1} (nodo \#10)\\scale = 3, val = 0};
+
+\node[leafnode] (N9) at (3.0,-4.9) {\textbf{3} (nodo \#9)\\lexval = '3'};
+\node[leafnode] (N11) at (5.4,-4.9) {\textbf{e} (nodo \#11)};
+
+\draw[-] (N1) -- (N2);
+\draw[-] (N1) -- (N6);
+\draw[-] (N2) -- (N3);
+\draw[-] (N2) -- (N4);
+\draw[-] (N4) -- (N5);
+\draw[-] (N6) -- (N7);
+\draw[-] (N6) -- (N8);
+\draw[-] (N6) -- (N10);
+\draw[-] (N8) -- (N9);
+\draw[-] (N10) -- (N11);
+\end{tikzpicture}
+\caption{\'Arbol de parseo anotado para la cadena $w = \texttt{\^{}2+3}$.}
+\label{fig:annotated_tree}
+\end{figure}
+
+\subsubsection{Grafo de Dependencias y Orden Topol\'ogico}
+En la Figura~\ref{fig:dep_graph} se muestra el grafo de dependencias (Secci\'on 5.2.1), donde cada v\'ertice corresponde a un atributo de un nodo del \'arbol y cada arista dirigida apunta \textbf{desde el atributo usado hacia el atributo definido}.
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[
+    depnode/.style={
+        rectangle, rounded corners=2pt, draw=accentgreen!80!black, fill=codebg,
+        font=\ttfamily\scriptsize, align=center, inner sep=3pt
+    },
+    >=Stealth
+]
+\node[depnode] (V1) at (-5.5, 0) {[5] B(\#2).scale\\= 1};
+\node[depnode] (V2) at (-5.5, -1.5) {[8] B1(\#4).scale\\= 2};
+\node[depnode] (V3) at (-5.5, -3.0) {[2] 2(\#5).lexval\\= '2'};
+\node[depnode] (V4) at (-2.2, -2.2) {[11] B1(\#4).val\\= 4};
+\node[depnode] (V5) at (-2.2, -0.5) {[13] B(\#2).val\\= 4};
+
+\node[depnode] (V6) at (0.8, 1.0) {[15] S(\#1).val\\= 10};
+
+\node[depnode] (V7) at (0.8, -0.6) {[7] R(\#6).scale\\= 2};
+\node[depnode] (V8) at (0.8, -2.2) {[9] B(\#8).scale\\= 2};
+\node[depnode] (V9) at (0.8, -3.7) {[4] 3(\#9).lexval\\= '3'};
+\node[depnode] (V10) at (3.8, -2.8) {[12] B(\#8).val\\= 6};
+
+\node[depnode] (V11) at (4.5, -0.6) {[10] R1(\#10).scale\\= 3};
+\node[depnode] (V12) at (4.5, -1.7) {[6] R1(\#10).val\\= 0};
+\node[depnode] (V13) at (3.8, 0.5) {[14] R(\#6).val\\= 6};
+
+\node[depnode] (L1) at (-5.5, 1.1) {[1] \^{}(\#3).lexval = '\^{}'};
+\node[depnode] (L2) at (-2.2, 1.1) {[3] +(\#7).lexval = '+'};
+
+\draw[->, thick, accentblue] (V1) -- (V2);
+\draw[->, thick, accentblue] (V1) -- (V7);
+\draw[->, thick, accentblue] (V2) -- (V4);
+\draw[->, thick, accentblue] (V3) -- (V4);
+\draw[->, thick, accentblue] (V4) -- (V5);
+\draw[->, thick, accentblue] (V5) -- (V6);
+
+\draw[->, thick, accentblue] (V7) -- (V8);
+\draw[->, thick, accentblue] (V7) -- (V11);
+\draw[->, thick, accentblue] (V8) -- (V10);
+\draw[->, thick, accentblue] (V9) -- (V10);
+\draw[->, thick, accentblue] (V10) -- (V13);
+\draw[->, thick, accentblue] (V12) -- (V13);
+\draw[->, thick, accentblue] (V13) -- (V6);
+\end{tikzpicture}
+\caption{Grafo de dependencias para $w = \texttt{\^{}2+3}$ con la numeraci\'on del orden topol\'ogico $[1..15]$.}
+\label{fig:dep_graph}
+\end{figure}
+
+Un orden topol\'ogico v\'alido (calculado por \texttt{topological\_sort}) es:
+\begin{enumerate}\small\itemsep0pt
+    \item \texttt{\^{}(node 3).lexval = '\^{}'} \quad (hoja terminal, grado de entrada 0)
+    \item \texttt{2(node 5).lexval = '2'} \quad (hoja terminal, grado de entrada 0)
+    \item \texttt{+(node 7).lexval = '+'} \quad (hoja terminal, grado de entrada 0)
+    \item \texttt{3(node 9).lexval = '3'} \quad (hoja terminal, grado de entrada 0)
+    \item \texttt{B(node 2).scale = 1} \quad (regla constante en $S \to BR$, grado de entrada 0)
+    \item \texttt{R1(node 10).val = 0} \quad (regla constante en $R_1 \to e$, grado de entrada 0)
+    \item \texttt{R(node 6).scale = B(node 2).scale + 1 = 2} \quad (usa $[5]$)
+    \item \texttt{B1(node 4).scale = B(node 2).scale * 2 = 2} \quad (usa $[5]$)
+    \item \texttt{B(node 8).scale = R(node 6).scale = 2} \quad (usa $[7]$)
+    \item \texttt{R1(node 10).scale = R(node 6).scale + 1 = 3} \quad (usa $[7]$)
+    \item \texttt{B1(node 4).val = int(2(node 5).lexval) * B1(node 4).scale = 4} \quad (usa $[2, 8]$)
+    \item \texttt{B(node 8).val = int(3(node 9).lexval) * B(node 8).scale = 6} \quad (usa $[4, 9]$)
+    \item \texttt{B(node 2).val = B1(node 4).val = 4} \quad (usa $[11]$)
+    \item \texttt{R(node 6).val = B(node 8).val + R1(node 10).val = 6} \quad (usa $[12, 6]$)
+    \item \texttt{S(node 1).val = B(node 2).val + R(node 6).val = 10} \quad (usa $[13, 14]$)
+\end{enumerate}
+
+\subsection{Paso 4: Clasificaci\'on Formal de la SDD}
+\begin{itemize}
+    \item \textbf{¿Es S-atribuida? NO.} Seg\'un la Definici\'on de la Secci\'on 5.2.3 (p\'ag. 313), una SDD es S-atribuida si y solo si \emph{todos} sus atributos son sintetizados. Nuestra SDD incluye el atributo heredado \texttt{scale} en los no terminales $B$ y $R$; por lo tanto, no es S-atribuida.
+    \item \textbf{¿Es L-atribuida? S\'I.} Seg\'un la Definici\'on de la Secci\'on 5.2.4 (p\'ag. 313), una SDD es L-atribuida si cada atributo es o bien (1) sintetizado, o bien (2) heredado para un s\'imbolo $X_i$ en el cuerpo $A \to X_1 X_2 \dots X_n$ dependiendo \'unicamente de: (a) atributos heredados de la cabeza $A$, o (b) atributos heredados o sintetizados de s\'imbolos $X_1, \dots, X_{i-1}$ ubicados estrictamente a la izquierda de $X_i$. Verificando todas las reglas que definen el atributo heredado \texttt{scale}:
+    \begin{enumerate}
+        \item En $S \to B R$: $B.\text{scale} = 1$ (constante) y $R.\text{scale} = B.\text{scale} + 1$ ($B$ est\'a a la izquierda de $R$).
+        \item En $R \to + B R_1$: $B.\text{scale} = R.\text{scale}$ (heredado de la cabeza $R$) y $R_1.\text{scale} = R.\text{scale} + 1$ (heredado de la cabeza $R$).
+        \item En $B \to \text{\^{}} B_1$: $B_1.\text{scale} = B.\text{scale} \times 2$ (heredado de la cabeza $B$).
+    \end{enumerate}
+    Ning\'un atributo heredado depende de atributos a su derecha. En consecuencia, la SDD es \textbf{L-atribuida (pero no S-atribuida)}. Tal como exige el Paso 4, independientemente de ser L-atribuida, el evaluador implementa el m\'etodo general del grafo de dependencias y ordenamiento topol\'ogico del Paso 5.
+\end{itemize}
+
+\subsection{Paso 6: Pruebas Experimentales y Detecci\'on de SDD Circular}
+
+\subsubsection{Resultados sobre 5 Cadenas de Prueba (\texttt{uv run python main.py --sdd})}
+Se prob\'o el evaluador con 5 cadenas representativas: (1) la cadena m\'as corta del lenguaje (\texttt{2}), (2) el ejemplo de 4 terminales del Paso 3 (\texttt{\^{}2+3}), (3) una cadena con anidamiento y recursi\'on profunda (\texttt{\^{}\^{}3+\^{}2+3}), (4) una suma m\'ultiple (\texttt{2+3+2}) y (5) una cadena inv\'alida fuera del lenguaje (\texttt{2++3}):
+
+\begin{lstlisting}
+$ printf "2\n^2+3\n^^3+^2+3\n2+3+2\n2++3\n\n" | uv run python main.py --sdd
+Annotated Parse Tree:
+S (node 1) [val=2]
+  B (node 2) [scale=1, val=2]
+    2 (node 3) [lexval=2]
+  R (node 4) [scale=2, val=0]
+    e (node 5)
+Evaluation Order:
+1. 2(node 3).lexval = 2 -> 2. B(node 2).scale = 1 -> 3. R(node 4).val = 0 -> 4. R(node 4).scale = 2 -> 5. B(node 2).val = 2 -> 6. S(node 1).val = 2
+S.val = 2
+...
+S.val = 10   (para ^2+3)
+S.val = 29   (para ^^3+^2+3: 3*(1*2*2) + 2*(2*2) + 3*3 = 12 + 8 + 9 = 29)
+S.val = 14   (para 2+3+2:   2*1 + 3*2 + 2*3 = 2 + 6 + 6 = 14)
+no           (para 2++3:    cadena rechazada por el parser)
+\end{lstlisting}
+
+\subsubsection{Demostraci\'on de Detecci\'on de SDD Circular (\texttt{--sdd-circular})}
+Al modificar temporalmente la primera regla de la producci\'on $S \to B R$ para que $B.\text{scale} = S.\text{val}$ (dependiendo del atributo sintetizado de la cabeza $S$), se induce el ciclo dirigido $B(\#2).\text{scale} \to B(\#2).\text{val} \to S(\#1).\text{val} \to B(\#2).\text{scale}$. Al ejecutar:
+\begin{lstlisting}
+$ printf "2\n\n" | uv run python main.py --sdd-circular
+Error: SDD is circular (cycle detected in dependency graph).
+\end{lstlisting}
+el algoritmo de ordenamiento topol\'ogico detecta que los v\'ertices del ciclo nunca alcanzan grado de entrada cero ($\text{len}(\text{order}) < |\mathcal{V}|$), detiene la evaluaci\'on y reporta la circularidad.
+
+% =============================================================================
+\section{Problemas Encontrados y Soluciones Implementadas}
+% =============================================================================
+
+Durante el desarrollo del proyecto surgieron tres retos t\'ecnicos principales:
+
+\begin{enumerate}
+    \item \textbf{Representaci\'on de producciones $\varepsilon$ (\texttt{A -> e}) en los \'items $LR(0)$ y en \texttt{parse\_slr1}}:
+    Inicialmente, si se trataba el car\'acter \texttt{'e'} como un s\'imbolo ordinario de longitud 1 en el cuerpo de una producci\'on, el generador de \'items creaba dos \'items ($[A \to \cdot e]$ y $[A \to e \cdot]$) e intentaba hacer transiciones \texttt{GOTO} sobre \texttt{'e'}. Consultando la Secci\'on 4.6.2 del libro de Aho (p\'ag. 242: \emph{``The production $A \to \varepsilon$ generates only one item, $A \to \cdot$''}), se solucion\'o definiendo la funci\'on \texttt{effective\_body(body)} que traduce \texttt{'e'} a la cadena vac\'ia \texttt{""} de longitud 0. De este modo, toda producci\'on $A \to e$ genera un \'unico \'item $(A, \text{"e"}, 0)$ donde el punto ya se encuentra al final del cuerpo, y al reducir por $A \to e$ se desapilan $k = 0$ estados de la pila.
+
+    \item \textbf{Distinci\'on de m\'ultiples ocurrencias del mismo no terminal en producciones recursivas de la SDD}:
+    En producciones recursivas como $R \to + B R_1$ y $B \to \text{\^{}} B_1$, el mismo s\'imbolo no terminal aparece tanto en la cabeza como en el cuerpo. Si las reglas sem\'anticas se indexaran por el nombre del s\'imbolo (\texttt{"R"} o \texttt{"B"}), habr\'ia colisi\'on entre el padre y el hijo. Se resolvi\'o referenciando los s\'imbolos de cada producci\'on por su \textbf{\'indice posicional}: \texttt{0} para la cabeza de la producci\'on e \'indices $1, 2, \dots, k$ para los hijos de izquierda a derecha, combinados con un identificador \'unico \texttt{node\_id} en cada \texttt{ParseNode} del \'arbol.
+
+    \item \textbf{Direcci\'on de las aristas en el Grafo de Dependencias}:
+    Un error conceptual frecuente (advertido en la Secci\'on 3 del documento gu\'ia) es dirigir las aristas desde el atributo definido hacia los atributos que utiliza, lo cual invertir\'ia el orden topol\'ogico. Se verific\'o con la Secci\'on 5.2.1 (p\'ag. 310) que si una regla define $A.b$ usando $X.c$, la arista dirigida debe ser $(X.c \to A.b)$, garantizando que $X.c$ tenga grado de entrada menor y se eval\'ue antes que $A.b$.
+\end{enumerate}
+
+% =============================================================================
+\begin{thebibliography}{9}
+\bibitem{aho2006}
+Alfred V. Aho, Monica S. Lam, Ravi Sethi, and Jeffrey D. Ullman.
+\textit{Compilers: Principles, Techniques, and Tools} (2nd Edition).
+Addison-Wesley Longman Publishing Co., Inc., USA, 2006. ISBN: 0321486811.
+\end{thebibliography}
+
+\end{document}
