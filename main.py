@@ -281,6 +281,59 @@ class ParseNode:
 LL1Table = dict[tuple[str, str], list[tuple[str, str]]]
 
 
+def find_ll1_conflicts(
+    grammar: Grammar,
+    first_sets: dict[str, set[str]],
+    follow_sets: dict[str, set[str]],
+) -> list[str]:
+    """Verifica la condicion de gramatica LL(1) de la Seccion 4.4.3 (pags. 223-224).
+
+    Una gramatica es LL(1) si y solo si, para cada par de producciones distintas
+    A -> alfa | beta, se cumple:
+    1. alfa y beta no derivan cadenas que empiecen con el mismo terminal.
+    2. A lo sumo una de las dos (alfa o beta) deriva e.
+    3. Si beta deriva e, alfa no deriva cadenas que empiecen con un terminal de
+       FOLLOW(A); y lo mismo intercambiando alfa y beta.
+    El libro las reescribe con conjuntos (pag. 224), que es lo que se revisa aqui:
+    - Condiciones 1 y 2: FIRST(alfa) y FIRST(beta) son disjuntos.
+    - Condicion 3: si e esta en FIRST(beta), FIRST(alfa) y FOLLOW(A) son
+      disjuntos; y lo mismo si e esta en FIRST(alfa).
+
+    Retorna la lista de condiciones violadas (vacia si la gramatica es LL(1)).
+    """
+    conflicts: list[str] = []
+    for nt in grammar.nonterminals:
+        # Una alternativa repetida es la misma produccion, por eso se quitan duplicados
+        bodies = list(dict.fromkeys(grammar.productions[nt]))
+        for i in range(len(bodies)):
+            for j in range(i + 1, len(bodies)):
+                alpha, beta = bodies[i], bodies[j]
+                first_alpha = compute_first_of_string(alpha, first_sets)
+                first_beta = compute_first_of_string(beta, first_sets)
+                follow_a = follow_sets[nt]
+                pair = f"{nt} -> {alpha} | {beta}"
+
+                # Condiciones 1 y 2: FIRST(alfa) y FIRST(beta) deben ser disjuntos
+                common = first_alpha & first_beta
+                if common:
+                    conflicts.append(
+                        f"{pair}: FIRST de ambas comparte {format_symbol_set(common)}"
+                    )
+                # Condicion 3: si beta deriva e, FIRST(alfa) y FOLLOW(A) deben ser disjuntos
+                if EPSILON in first_beta and first_alpha & follow_a:
+                    conflicts.append(
+                        f"{pair}: {beta} deriva e y FIRST({alpha}) comparte "
+                        f"{format_symbol_set(first_alpha & follow_a)} con FOLLOW({nt})"
+                    )
+                # Condicion 3 intercambiando alfa y beta
+                if EPSILON in first_alpha and first_beta & follow_a:
+                    conflicts.append(
+                        f"{pair}: {alpha} deriva e y FIRST({beta}) comparte "
+                        f"{format_symbol_set(first_beta & follow_a)} con FOLLOW({nt})"
+                    )
+    return conflicts
+
+
 def build_ll1_table(
     grammar: Grammar,
     first_sets: dict[str, set[str]],
@@ -288,8 +341,9 @@ def build_ll1_table(
 ) -> tuple[LL1Table, bool]:
     """Algoritmo 4.31: Construccion de una tabla de analisis sintactico predictivo (pag. 224).
 
-    Tambien verifica la condicion de gramatica LL(1) de la Seccion 4.4.3 (pag. 223):
-    una gramatica es LL(1) si y solo si ninguna entrada M[A, a] tiene mas de una produccion.
+    Tambien decide si la gramatica es LL(1) con la condicion de la Seccion 4.4.3
+    (ver find_ll1_conflicts). Si la condicion se cumple, ninguna entrada M[A, a]
+    queda con mas de una produccion.
     """
     table: LL1Table = {}
     input_symbols = set(grammar.terminals) | {ENDMARKER}
@@ -315,9 +369,21 @@ def build_ll1_table(
                 if (head, body) not in cell:
                     cell.append((head, body))
 
-    # Condicion LL(1) (Seccion 4.4.3): Sin entradas multiplemente definidas en M[A, a]
-    is_ll1 = all(len(prods) <= 1 for prods in table.values())
+    # Condicion LL(1) (Seccion 4.4.3): la gramatica es LL(1) si no viola ninguna condicion
+    is_ll1 = not find_ll1_conflicts(grammar, first_sets, follow_sets)
     return table, is_ll1
+
+
+def contains_only_terminals(w: str, terminals: set[str]) -> bool:
+    """Verifica que todos los caracteres de la cadena w sean terminales de la gramatica.
+
+    Una cadena del lenguaje solo tiene terminales (Seccion 2.2): un no terminal
+    como 'S', o el marcador '$' (que lo agrega el programa), nunca pueden estar
+    en ella. Sin esta verificacion, el parser LL(1) emparejaria la letra 'S' de la
+    entrada con el no terminal S del tope de la pila, y el parser SLR(1) aceptaria
+    antes de tiempo al encontrar un '$' en medio de la cadena.
+    """
+    return all(ch in terminals for ch in w)
 
 
 def parse_ll1(
@@ -333,6 +399,11 @@ def parse_ll1(
     w = "" if input_string == EPSILON else input_string
     buffer = w + ENDMARKER
     ip = 0
+
+    # Una cadena con simbolos que no son terminales no pertenece al lenguaje
+    if not contains_only_terminals(w, grammar.terminals):
+        start_stack = grammar.start_symbol + ENDMARKER
+        return False, None, [{"stack": start_stack, "input": buffer, "action": "error"}]
 
     # Pila explicita con $ en el fondo y el simbolo inicial S en el tope
     root = ParseNode(symbol=grammar.start_symbol)
@@ -571,6 +642,15 @@ def parse_slr1(
     w = "" if input_string == EPSILON else input_string
     buffer = w + ENDMARKER
     ip = 0
+
+    # Una cadena con simbolos que no son terminales no pertenece al lenguaje.
+    # Los terminales son las columnas de ACTION (build_slr_table crea una por
+    # cada terminal y otra para '$', que no puede aparecer dentro de la cadena).
+    terminals = {a for (_, a) in action_table if a != ENDMARKER}
+    if not contains_only_terminals(w, terminals):
+        return False, None, [
+            {"stack": "0", "symbols": "$", "input": buffer, "action": "error"}
+        ]
 
     # Pila de estados con el estado inicial s0 = 0, y pila paralela de nodos del arbol
     state_stack: list[int] = [0]
