@@ -31,6 +31,7 @@ Implementation of **FIRST and FOLLOW sets** (Item 1), **Table-Driven Predictive 
 .
 ├── main.py          # Core implementation of Items 1, 2, and 3 (Python stdlib only)
 ├── visualizer.py    # Optional interactive academic workbench in Streamlit
+├── Examples/        # 5 representative .txt test files covering all program cases
 ├── pyproject.toml   # Project metadata and dependencies managed by uv
 ├── report.tex       # Academic report in LaTeX (Spanish, Overleaf-ready with TikZ diagrams)
 ├── exp_code.md      # Line-by-line code explanation and oral defense preparation (Spanish)
@@ -67,6 +68,28 @@ When executed with `--sets`, after reading the grammar the program prints `First
 
 ```bash
 uv run python main.py --sets
+```
+
+### 3. Running Automated Examples from the `Examples/` Directory (`--file` Flag)
+
+To avoid typing grammars and test strings manually in the console, you can pass the path to any example file in `Examples/` via `--file <path>` (or `-f <path>`, or directly `<path>`). If no file flag is passed, the program reads from standard console input (`stdin`) as usual:
+
+```bash
+# 1. Own grammar G1 (both LL(1) and SLR(1), tests T, B, and Q)
+uv run python main.py --sets --file Examples/1_GramaticaPropia_LL1_y_SLR1.txt
+
+# 2. Classic arithmetic expressions (SLR(1) only due to left recursion)
+uv run python main.py --sets --file Examples/2_Solo_SLR1_ExpresionesAritmeticas.txt
+
+# 3. LL(1)-only grammar (SLR(1) has a reduce/reduce conflict, Aho Exercise 4.6.8)
+uv run python main.py --sets --file Examples/3_Solo_LL1_Sin_SLR1.txt
+
+# 4. Ambiguous grammar (neither LL(1) nor SLR(1))
+uv run python main.py --sets --file Examples/4_Ni_LL1_Ni_SLR1_Ambigua.txt
+
+# 5. SDD evaluation on the 5 report strings (and circular SDD detection)
+uv run python main.py --sdd --file Examples/5_Evaluacion_SDD_CadenasReporte.txt
+uv run python main.py --sdd-circular --file Examples/5_Evaluacion_SDD_CadenasReporte.txt
 ```
 
 ### 3. Reproducing the Official Examples from `docs/sdt_revised.pdf`

@@ -12,6 +12,9 @@ __pycache__/
 skills-lock.json
 AGENTS.md
 docs/PROMPT.md
+tests/
+test_*.py
+*_test.py
 
 # Archivos auxiliares de LaTeX
 *.aux

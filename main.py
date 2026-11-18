@@ -4,14 +4,20 @@ Basado estrictamente en:
 - Aho, Lam, Sethi & Ullman, "Compilers: Principles, Techniques, and Tools" (2da Ed.),
   Capitulos 4 (Secciones 4.4, 4.5, 4.6) y 5 (Secciones 5.1, 5.2).
 - Especificacion oficial del proyecto (docs/sdt_revised.pdf).
-
-Restriccion cumplida: Utiliza unicamente la libreria estandar de Python.
 """
 
+# Annotations está acá porque tenemos autoreferencias en algunas clases como ParseNode, si no está, entonces asume ParseNode como objeto real
+# En caso de quitarlo, habría que poner "ParseNode" (entre comillas)
 from __future__ import annotations
 
+# field es para evitar que al crear una lista o diccionario vacío en atributos de la clase todas las instancias
+# Compartan el mismo espacio en memoria. Esto porque las listas y dict son mutables en python (no los str)
 from dataclasses import dataclass, field
+
+# Para tomar texto usamos sys y no input() porque este último saca una excepción EOFError cuando se acaba in archivo redirigido
 import sys
+# Typing es para escribir anotaciones type hints, any es para cualquier tipo de dato y callable es cuando el objetc se puede 
+# llamar en paréntesis o es una función (en nuestro caso, funciones lambda)
 from typing import Any, Callable
 
 
@@ -26,14 +32,16 @@ AUGMENTED_START = "S'"
 # ESTRUCTURAS DE DATOS PARA LA GRAMATICA (Seccion 4.2 y Seccion 2.2)
 # =============================================================================
 
-
+# Recordar que el decorador genera los métodos dunder, como __init__, __repr__, __eq__ etc
 @dataclass
 class Grammar:
     """Representa una gramatica libre de contexto G = (N, T, P, S)."""
 
     nonterminals: list[str]
     terminals: set[str]
+    # Diccionario para comparar todas las alternativas de un no terminal, como en find_ll1_conflicts
     productions: dict[str, list[str]]
+    # Lista de tuplas para recorrer todas las producciones de forma directa con un solo bucle, de lo contrario serían dos bucles
     production_list: list[tuple[str, str]]
     start_symbol: str = INITIAL_SYMBOL
 
@@ -63,10 +71,12 @@ def parse_grammar_lines(lines: list[str]) -> Grammar:
 
     for raw_line in lines:
         line = raw_line.strip()
+        # Si la linea quedó vacía, como linea en blanco accidental, la salta
         if not line:
             continue
         head_part, body_part = line.split("->")
         head = head_part.strip()
+        # Separa las producciones por sus espacios en blanco
         alternatives = body_part.strip().split()
 
         if head not in productions:
@@ -76,10 +86,9 @@ def parse_grammar_lines(lines: list[str]) -> Grammar:
         for alt in alternatives:
             productions[head].append(alt)
             production_list.append((head, alt))
-            if alt != EPSILON:
-                for ch in alt:
-                    if not is_nonterminal(ch):
-                        terminals.add(ch)
+            for ch in alt:
+                if is_terminal(ch):
+                    terminals.add(ch)
 
     return Grammar(
         nonterminals=nonterminals,
@@ -124,11 +133,11 @@ def compute_first_sets(grammar: Grammar) -> dict[str, set[str]]:
     for t in grammar.terminals:
         first[t] = {t}
 
-    # Inicializar conjuntos vacios para los no terminales
+    # Inicializar conjuntos vacios para los no terminales, inicializar antes evia errores KeyError
     for nt in grammar.nonterminals:
         first[nt] = set()
 
-    # Bucle de punto fijo hasta que no se puedan agregar mas simbolos
+    # Bucle de punto fijo (Fixed-point Iteration) hasta que no se puedan agregar mas simbolos. Osea, cuando hace una vuelta completa y ningún conjunto cambia
     changed = True
     while changed:
         changed = False
@@ -142,6 +151,7 @@ def compute_first_sets(grammar: Grammar) -> dict[str, set[str]]:
                 # Regla 2: X -> Y1 Y2 ... Yk
                 all_nullable = True
                 for symbol in body:
+                    # en caso de que aparezca un terminal que no estuviera en grammar.terminal, se guarda como {symbol}
                     sym_first = first.get(symbol, {symbol})
                     for tok in sym_first:
                         if tok != EPSILON:
@@ -157,7 +167,7 @@ def compute_first_sets(grammar: Grammar) -> dict[str, set[str]]:
 
     return first
 
-
+# El input es una cadena cualquiera alpha como "+BR", los First pre calculados y devuelve First(alpha)
 def compute_first_of_string(alpha: str, first_sets: dict[str, set[str]]) -> set[str]:
     """Calcula FIRST(X1 X2 ... Xn) para una cadena alfa (Seccion 4.4.2, pag. 221)."""
     if not alpha or alpha == EPSILON:
@@ -167,6 +177,7 @@ def compute_first_of_string(alpha: str, first_sets: dict[str, set[str]]) -> set[
     all_nullable = True
 
     for symbol in alpha:
+        # Busca el first de cada símbolo Xi
         sym_first = first_sets.get(symbol, {symbol})
         for tok in sym_first:
             if tok != EPSILON:
@@ -207,19 +218,23 @@ def compute_follow_sets(
             if body == EPSILON:
                 continue
             length = len(body)
+            # Recorre cada caracter del body junto con su indice 
             for i, symbol in enumerate(body):
+                # Follow solo tiene key con no terminales, acá se saltan los terminales
                 if symbol not in follow:
                     continue
                 before_size = len(follow[symbol])
+                # Se extrae por comprensión todsubcadena que está a la derecha de B
                 beta = body[i + 1 :] if i + 1 < length else ""
 
                 if beta:
                     # Regla 2: Todo en FIRST(beta) - {e} entra en FOLLOW(B)
                     first_beta = compute_first_of_string(beta, first_sets)
+                    # Añadir todos los terminales con los que podría empezar beta a Follow
                     for tok in first_beta:
                         if tok != EPSILON:
                             follow[symbol].add(tok)
-                    # Regla 3 (con beta anulable): FOLLOW(A) entra en FOLLOW(B)
+                    # Regla 3 (con beta anulable): FOLLOW(A) entra en FOLLOW(B), todo esto es la herencia
                     if EPSILON in first_beta:
                         follow[symbol].update(follow[head])
                 else:
@@ -269,7 +284,9 @@ class ParseNode:
 
     symbol: str
     production: tuple[str, str] | None = None
+    #Lista ordenada con los nodos hijos que derivan de este nodo
     children: list[ParseNode] = field(default_factory=list)
+    # Diccionario de atributos de la SDD para este nodo
     attributes: dict[str, Any] = field(default_factory=dict)
     node_id: int = 0
 
@@ -1094,7 +1111,7 @@ def format_annotated_tree(root: ParseNode) -> str:
     return "\n".join(lines)
 
 
-def run_sdd_mode(circular: bool = False) -> None:
+def run_sdd_mode(circular: bool = False, show_sets: bool = False) -> None:
     """Ejecuta el flujo del Item 3 (Seccion 3, Paso 5.5 de sdt_revised.pdf)."""
     sdd = build_default_sdd(circular=circular)
 
@@ -1114,6 +1131,8 @@ def run_sdd_mode(circular: bool = False) -> None:
 
     first_sets = compute_first_sets(sdd.grammar)
     follow_sets = compute_follow_sets(sdd.grammar, first_sets)
+    if show_sets:
+        print_first_and_follow_sets(sdd.grammar, first_sets, follow_sets)
     ll1_table, is_ll1 = build_ll1_table(sdd.grammar, first_sets, follow_sets)
     slr_action, slr_goto, _, is_slr1 = build_slr_table(sdd.grammar, follow_sets)
 
@@ -1169,18 +1188,37 @@ def parse_lines_until_empty(parse_fn: Callable[[str], bool]) -> None:
         print("yes" if result else "no")
 
 
+def resolve_input_file(args: list[str]) -> str | None:
+    """Extrae la ruta del archivo de ejemplo si se paso como bandera en la linea de comandos."""
+    for i, arg in enumerate(args):
+        if arg in ("--file", "-f") and i + 1 < len(args):
+            return args[i + 1]
+        if arg.startswith("--file="):
+            return arg.split("=", 1)[1]
+        if arg not in ("--sets", "--sdd", "--sdd-circular"):
+            candidate = arg[2:] if arg.startswith("--") else arg
+            if candidate.endswith(".txt"):
+                return candidate
+    return None
+
+
 def main() -> None:
     """Punto de entrada principal del programa (Items 1, 2 y 3)."""
+    # Captura las banderas de ejecucion
     args = sys.argv[1:]
+    show_sets = "--sets" in args
+
+    # Si se pasa la bandera con la ruta de un archivo de ejemplo, redirigir sys.stdin
+    input_file = resolve_input_file(args)
+    if input_file is not None:
+        sys.stdin = open(input_file, "r", encoding="utf-8")
 
     if "--sdd-circular" in args:
-        run_sdd_mode(circular=True)
+        run_sdd_mode(circular=True, show_sets=show_sets)
         return
     if "--sdd" in args:
-        run_sdd_mode(circular=False)
+        run_sdd_mode(circular=False, show_sets=show_sets)
         return
-
-    show_sets = "--sets" in args
 
     grammar = read_grammar_from_stdin()
     if grammar is None:
