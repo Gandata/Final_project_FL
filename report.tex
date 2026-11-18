@@ -405,48 +405,90 @@ En la Figura~\ref{fig:dep_graph} se muestra el grafo de dependencias (Secci\'on 
 
 \begin{figure}[htbp]
 \centering
+\resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
+    >=Stealth,
     depnode/.style={
-        rectangle, rounded corners=2pt, draw=accentgreen!80!black, fill=codebg,
-        font=\ttfamily\scriptsize, align=center, inner sep=3pt
+        rectangle,
+        rounded corners=3pt,
+        draw=accentgreen!80!black,
+        fill=codebg,
+        line width=0.6pt,
+        font=\ttfamily\scriptsize,
+        align=center,
+        inner sep=4pt,
+        minimum width=2.8cm,
+        minimum height=0.85cm
     },
-    >=Stealth
+    lexnode/.style={
+        depnode,
+        draw=codeframe!90!black,
+        fill=white,
+        minimum height=0.65cm
+    },
+    rootnode/.style={
+        depnode,
+        draw=accentblue!90!black,
+        fill=accentblue!8,
+        line width=0.9pt
+    },
+    depedge/.style={
+        ->,
+        thick,
+        draw=accentblue!85!black,
+        shorten >=1.5pt,
+        shorten <=1.5pt
+    }
 ]
-\node[depnode] (V1) at (-5.5, 0) {[5] B(\#2).scale\\= 1};
-\node[depnode] (V2) at (-5.5, -1.5) {[8] B1(\#4).scale\\= 2};
-\node[depnode] (V3) at (-5.5, -3.0) {[2] 2(\#5).lexval\\= '2'};
-\node[depnode] (V4) at (-2.2, -2.2) {[11] B1(\#4).val\\= 4};
-\node[depnode] (V5) at (-2.2, -0.5) {[13] B(\#2).val\\= 4};
 
-\node[depnode] (V6) at (0.8, 1.0) {[15] S(\#1).val\\= 10};
+% --- Fila superior: Hojas léxicas sin aristas salientes ---
+\node[lexnode] (L1) at (-4.0, 1.5) {[1] \^{}(\#3).lexval = '\^{}'};
+\node[lexnode] (L2) at ( 4.0, 1.5) {[3] +(\#7).lexval = '+'};
 
-\node[depnode] (V7) at (0.8, -0.6) {[7] R(\#6).scale\\= 2};
-\node[depnode] (V8) at (0.8, -2.2) {[9] B(\#8).scale\\= 2};
-\node[depnode] (V9) at (0.8, -3.7) {[4] 3(\#9).lexval\\= '3'};
-\node[depnode] (V10) at (3.8, -2.8) {[12] B(\#8).val\\= 6};
+% --- Raíz del valor sintetizado final (Centro superior) ---
+\node[rootnode] (V6) at (0.0, 1.5) {[15] S(\#1).val\\= 10};
 
-\node[depnode] (V11) at (4.5, -0.6) {[10] R1(\#10).scale\\= 3};
-\node[depnode] (V12) at (4.5, -1.7) {[6] R1(\#10).val\\= 0};
-\node[depnode] (V13) at (3.8, 0.5) {[14] R(\#6).val\\= 6};
+% --- Subárbol Izquierdo: Bloque B(#2) y B1(#4) ---
+\node[depnode] (V1) at (-5.6, -0.3) {[5] B(\#2).scale\\= 1};
+\node[depnode] (V2) at (-5.6, -2.1) {[8] B1(\#4).scale\\= 2};
+\node[lexnode] (V3) at (-5.6, -3.8) {[2] 2(\#5).lexval\\= '2'};
 
-\node[depnode] (L1) at (-5.5, 1.1) {[1] \^{}(\#3).lexval = '\^{}'};
-\node[depnode] (L2) at (-2.2, 1.1) {[3] +(\#7).lexval = '+'};
+\node[depnode] (V4) at (-2.1, -2.9) {[11] B1(\#4).val\\= 4};
+\node[depnode] (V5) at (-2.1, -0.3) {[13] B(\#2).val\\= 4};
 
-\draw[->, thick, accentblue] (V1) -- (V2);
-\draw[->, thick, accentblue] (V1) -- (V7);
-\draw[->, thick, accentblue] (V2) -- (V4);
-\draw[->, thick, accentblue] (V3) -- (V4);
-\draw[->, thick, accentblue] (V4) -- (V5);
-\draw[->, thick, accentblue] (V5) -- (V6);
+% --- Subárbol Derecho: Bloque R(#6), B(#8) y R1(#10) ---
+\node[depnode] (V7)  at (1.8, -0.3) {[7] R(\#6).scale\\= 2};
+\node[depnode] (V8)  at (1.8, -2.1) {[9] B(\#8).scale\\= 2};
+\node[lexnode] (V9)  at (1.8, -3.8) {[4] 3(\#9).lexval\\= '3'};
 
-\draw[->, thick, accentblue] (V7) -- (V8);
-\draw[->, thick, accentblue] (V7) -- (V11);
-\draw[->, thick, accentblue] (V8) -- (V10);
-\draw[->, thick, accentblue] (V9) -- (V10);
-\draw[->, thick, accentblue] (V10) -- (V13);
-\draw[->, thick, accentblue] (V12) -- (V13);
-\draw[->, thick, accentblue] (V13) -- (V6);
-\end{tikzpicture}
+\node[depnode] (V10) at (5.4, -2.9) {[12] B(\#8).val\\= 6};
+\node[depnode] (V13) at (5.4, -0.3) {[14] R(\#6).val\\= 6};
+
+\node[depnode] (V11) at (9.0, -0.3) {[10] R1(\#10).scale\\= 3};
+\node[depnode] (V12) at (9.0, -2.1) {[6] R1(\#10).val\\= 0};
+
+% --- Aristas de dependencia ( sin cruces sobre nodos ) ---
+% Propagación de escala hacia R(#6) por canal superior limpio
+\draw[depedge, rounded corners=5pt] (V1.north) -- ++(0, 0.55) -| (V7.north);
+
+% Rama izquierda
+\draw[depedge] (V1) -- (V2);
+\draw[depedge] (V2.east) -- (V4.north west);
+\draw[depedge] (V3.east) -- (V4.south west);
+\draw[depedge] (V4) -- (V5);
+\draw[depedge] (V5.north) -- (V6.south west);
+
+% Rama derecha
+\draw[depedge] (V7) -- (V8);
+\draw[depedge, rounded corners=5pt] (V7.south east) -- ++(0.6, -0.45) -| (V11.south);
+\draw[depedge] (V8.east) -- (V10.north west);
+\draw[depedge] (V9.east) -- (V10.south west);
+\draw[depedge] (V10) -- (V13);
+\draw[depedge] (V12.north west) -- (V13.south east);
+\draw[depedge] (V13.north) -- (V6.south east);
+
+\end{tikzpicture}%
+}
 \caption{Grafo de dependencias para $w = \texttt{\^{}2+3}$ con la numeraci\'on del orden topol\'ogico $[1..15]$.}
 \label{fig:dep_graph}
 \end{figure}
@@ -507,10 +549,6 @@ Durante el desarrollo del proyecto surgieron cinco retos t\'ecnicos principales 
 \textbf{Representaci\'on de producciones $\varepsilon$ (\texttt{A -> e}) en los \'items $LR(0)$ y en \texttt{parse\_slr1}.} Inicialmente, si se trataba el car\'acter \texttt{'e'} como un s\'imbolo ordinario de longitud 1 en el cuerpo de una producci\'on, el generador de \'items creaba dos \'items ($[A \to \cdot e]$ y $[A \to e \cdot]$) e intentaba hacer transiciones \texttt{GOTO} sobre \texttt{'e'}. Consultando la Secci\'on 4.6.2 del libro de Aho (p\'ag. 242: \emph{``The production $A \to \varepsilon$ generates only one item, $A \to \cdot$''}), se solucion\'o definiendo la funci\'on \texttt{effective\_body(body)} que traduce \texttt{'e'} a la cadena vac\'ia \texttt{""} de longitud 0. De este modo, toda producci\'on $A \to e$ genera un \'unico \'item $(A, \text{"e"}, 0)$ donde el punto ya se encuentra al final del cuerpo, y al reducir por $A \to e$ se desapilan $k = 0$ estados de la pila.
 
 \textbf{Distinci\'on de m\'ultiples ocurrencias del mismo no terminal en producciones recursivas de la SDD.} En producciones recursivas como $R \to + B R_1$ y $B \to \text{\^{}} B_1$, el mismo s\'imbolo no terminal aparece tanto en la cabeza como en el cuerpo. Si las reglas sem\'anticas se indexaran por el nombre del s\'imbolo (\texttt{"R"} o \texttt{"B"}), habr\'ia colisi\'on entre el padre y el hijo. Se resolvi\'o referenciando los s\'imbolos de cada producci\'on por su \textbf{\'indice posicional}: \texttt{0} para la cabeza de la producci\'on e \'indices $1, 2, \dots, k$ para los hijos de izquierda a derecha, combinados con un identificador \'unico \texttt{node\_id} en cada \texttt{ParseNode} del \'arbol.
-
-\textbf{Direcci\'on de las aristas en el Grafo de Dependencias.} Un error conceptual frecuente (advertido en la Secci\'on 3 del documento gu\'ia) es dirigir las aristas desde el atributo definido hacia los atributos que utiliza, lo cual invertir\'ia el orden topol\'ogico. Se verific\'o con la Secci\'on 5.2.1 (p\'ag. 310) que si una regla define $A.b$ usando $X.c$, la arista dirigida debe ser $(X.c \to A.b)$, garantizando que $X.c$ tenga grado de entrada menor y se eval\'ue antes que $A.b$.
-
-\textbf{Cadenas de entrada con s\'imbolos que no son terminales.} Al probar los analizadores con cadenas inv\'alidas encontramos dos errores. En \texttt{parse\_ll1}, el caso ``$X = a$'' de la Fig.~4.20 supone que $a$ es un terminal; con la cadena \texttt{S}, el no terminal $S$ del tope de la pila coincid\'ia con la letra \texttt{S} de la entrada y la cadena se aceptaba. En \texttt{parse\_slr1}, un \texttt{\$} escrito dentro de la cadena (por ejemplo \texttt{ca\$} con la gram\'atica $S \to cb \mid ca$) llevaba a la acci\'on \textit{accept} antes de terminar de leer la entrada. Como una cadena del lenguaje solo tiene terminales (Secci\'on 2.2 del enunciado) y el marcador \texttt{\$} lo agrega el programa, se agreg\'o la funci\'on \texttt{contains\_only\_terminals}: los dos analizadores responden \texttt{no} de inmediato a cualquier cadena que tenga un car\'acter que no sea terminal de la gram\'atica.
 
 \textbf{Condici\'on $LL(1)$ frente a la tabla predictiva.} Inicialmente se decid\'ia que una gram\'atica era $LL(1)$ cuando ninguna celda de la tabla del Algoritmo 4.31 ten\'ia m\'as de una producci\'on. Sin embargo, el enunciado pide implementar la condici\'on dada al comienzo de la Secci\'on 4.4.3, y las dos pruebas no siempre coinciden: si un no terminal no se puede alcanzar desde $S$, su conjunto $\text{FOLLOW}$ es vac\'io, y si tiene dos alternativas que derivan $\varepsilon$ viola la condici\'on 2 sin que el paso 2 del algoritmo escriba nada en la tabla (por ejemplo, $S \to \varepsilon$, $C \to \varepsilon \mid SC$). Por eso se implement\'o \texttt{find\_ll1\_conflicts}, que revisa para cada par de producciones $A \to \alpha \mid \beta$ que $\text{FIRST}(\alpha)$ y $\text{FIRST}(\beta)$ sean disjuntos y que, si una de las dos deriva $\varepsilon$, el $\text{FIRST}$ de la otra sea disjunto de $\text{FOLLOW}(A)$. Cuando la condici\'on se cumple, la tabla queda sin celdas m\'ultiplemente definidas.
 
