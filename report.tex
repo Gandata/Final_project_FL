@@ -305,11 +305,11 @@ La gram\'atica $G_{\text{SDD}}$ elegida es:
 S \to B R \quad \mid \quad R \to + B R \mid \varepsilon \quad \mid \quad B \to \text{\^{}} B \mid 2 \mid 3
 \]
 
-\textbf{Cumplimiento de G1.} La gram\'atica sigue todas las convenciones de formato de la Secci\'on 2.2 (\texttt{S} es el s\'imbolo inicial, los no terminales est\'an en may\'usculas, los terminales son de un car\'acter y se emplea \texttt{e} para representar $\varepsilon$). Adem\'as, como se demostr\'o en la Secci\'on 2, es simult\'aneamente $LL(1)$ y $SLR(1)$.
+La gram\'atica sigue todas las convenciones de formato de la Secci\'on 2.2 (\texttt{S} es el s\'imbolo inicial, los no terminales est\'an en may\'usculas, los terminales son de un car\'acter y se emplea \texttt{e} para representar $\varepsilon$). Adem\'as, como se demostr\'o en la Secci\'on 2, es simult\'aneamente $LL(1)$ y $SLR(1)$.
 
-\textbf{Cumplimiento de G2.} La especificaci\'on cuenta con \textbf{3 no terminales} ($S, R, B \ge 3$), un total de \textbf{6 producciones} ($\ge 6$) y \textbf{2 no terminales recursivos} correspondientes a las reglas $R \to +BR$ y $B \to \text{\^{}}B$.
+La especificaci\'on cuenta con \textbf{3 no terminales} ($S, R, B \ge 3$), un total de \textbf{6 producciones} ($\ge 6$) y \textbf{2 no terminales recursivos} correspondientes a las reglas $R \to +BR$ y $B \to \text{\^{}}B$.
 
-\textbf{Cumplimiento de G3.} Ni la gram\'atica ni la SDD pertenecen al libro de Aho ni al documento gu\'ia. El sistema modela un evaluador de sumas ponderadas por posici\'on donde cada bloque sucesivo en $R$ incrementa su escala base ($\text{scale} + 1$) y cada operador prefijo \texttt{\^{}} duplica la escala heredada ($\text{scale} \times 2$).
+El sistema modela un evaluador de sumas ponderadas por posici\'on donde cada bloque sucesivo en $R$ incrementa su escala base ($\text{scale} + 1$) y cada operador prefijo \texttt{\^{}} duplica la escala heredada ($\text{scale} \times 2$).
 
 \subsection{Paso 2: Tabla de Atributos y Reglas Sem\'anticas}
 En las Tablas~\ref{tab:attrs} y~\ref{tab:rules} se presentan los atributos y las reglas sem\'anticas de la SDD. Se verifica que existen atributos heredados (\texttt{scale}) y sintetizados (\texttt{val}), que el s\'imbolo inicial $S$ \textbf{no posee atributos heredados}, y que en cada producci\'on todo atributo sintetizado de la cabeza y todo atributo heredado de cada no terminal en el cuerpo se define exactamente una vez.

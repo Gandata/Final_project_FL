@@ -764,6 +764,8 @@ def parse_slr1(
 
 # Referencia a una ocurrencia de simbolo dentro de una produccion:
 # indice 0 = cabeza A; indice i >= 1 = i-esimo simbolo del cuerpo X_i (1-based).
+# En ("R", "+BR") -> 0:R, 1:+, 2:B, 3:r
+# En el código (2, "Scale") significa B.scale
 AttrRef = tuple[int, str]
 
 
@@ -775,10 +777,15 @@ class SemanticRule:
     - dependencies: lista de (indice_simbolo, nombre_atributo) de los que depende.
     - compute: funcion que recibe la tupla de valores de 'dependencies' y retorna el valor.
     - description: expresion legible de la regla para visualizacion y trazabilidad.
+    
+    Ejemplo: R1.scale = R.scale + 1
     """
 
     target: AttrRef
+    # Lista de todos los atributos que la regla lee para poder calcularse.
     dependencies: list[AttrRef]
+    
+    #Ejecuta función matemática real lambda. Recibe lista vals con los valores evaluados en el orden de dependencies, devulve resultado
     compute: Callable[[ list[Any]], Any]
     description: str
 
@@ -788,7 +795,9 @@ class SDD:
     """Almacena la SDD como datos puros separados del motor evaluador (Paso 5.1)."""
 
     grammar: Grammar
+    # la lista de reglas por producción, cuando se visita un nodo interno con nd.production = ("S", "BR") busca estas reglas
     rules_by_production: dict[tuple[str, str], list[SemanticRule]]
+    # Nombre del atributo sintetizado en la raiz, contiene el resultado final de toda la evaluación
     main_attribute: str
 
 
@@ -806,8 +815,7 @@ def build_default_sdd(circular: bool = False) -> SDD:
         5) B -> 2
         6) B -> 3
     Cumple G1 (convenciones de 2.2, es tanto LL(1) como SLR(1)),
-    G2 (3 no terminales, 6 producciones, R y B son recursivos),
-    y G3 (gramatica y calculo originales, distintos del libro y del PDF).
+    G2 (3 no terminales, 6 producciones, R y B son recursivos).    
 
     Atributos:
       - scale (heredado, int) en B y R: factor de escala posicional/jerarquico.
@@ -943,14 +951,17 @@ def build_default_sdd(circular: bool = False) -> SDD:
         main_attribute="val",
     )
 
-
+# Como todos los parse nodes nacen con node_id = 0, y si hay dos nodos distintos con "B" o "R"
+# Estos chocan, así que se le asigna un id a cada nodo después de construir el arbol LL(1) o SLR(1)
 def assign_node_ids(root: ParseNode) -> list[ParseNode]:
     """Asigna identificadores unicos en preorden a cada nodo del arbol de parseo."""
     nodes: list[ParseNode] = []
 
+    # Realiza el recorrido en profundidad en preorden (primero procesa el nodo actual y luego los hijos de izquierda a derecha)
     def _visit(node: ParseNode) -> None:
         node.node_id = len(nodes) + 1
         nodes.append(node)
+        # Por recursión si el nodo es una hoja, el bucle no se ejecuta y retrocede
         for child in node.children:
             _visit(child)
 
@@ -961,14 +972,17 @@ def assign_node_ids(root: ParseNode) -> list[ParseNode]:
 # Un vertice del grafo de dependencias es (node_id, attr_name)
 DepVertex = tuple[int, str]
 
-
 @dataclass
 class DependencyGraph:
     """Grafo de dependencias de atributos sobre un arbol de parseo (Seccion 5.2.1, pag. 310)."""
 
+    #Lista ordenada de todos los atributos sin repetir
     vertices: list[DepVertex]
+    # (Origen, destino), (c, b) significa que b depende de c
     edges: list[tuple[DepVertex, DepVertex]]
+    # Asocia con (regla, lista_de_vértices_dependencia)
     vertex_rules: dict[DepVertex, tuple[SemanticRule, list[DepVertex]]]
+    # indice rapido node_id -> ParseNode, para leer en node.attributes
     node_map: dict[int, ParseNode]
 
 
@@ -979,13 +993,16 @@ def build_dependency_graph(root: ParseNode, sdd: SDD) -> DependencyGraph:
     (c -> b), es decir, desde el atributo usado hacia el atributo definido.
     """
     all_nodes = assign_node_ids(root)
+    # Construye diccionarios de acceso rápido
     node_map = {nd.node_id: nd for nd in all_nodes}
 
+    # Se tienen listas de vertices para hacer inserción y búsqueda, manteniendo el orden de inserción.
     vertices: list[DepVertex] = []
     vertex_set: set[DepVertex] = set()
     edges: list[tuple[DepVertex, DepVertex]] = []
     vertex_rules: dict[DepVertex, tuple[SemanticRule, list[DepVertex]]] = {}
 
+    # Funcion para evitar duplicar vertices cuando varios nodos comparten dependencias.
     def _add_vertex(v: DepVertex) -> None:
         if v not in vertex_set:
             vertex_set.add(v)
@@ -1001,25 +1018,32 @@ def build_dependency_graph(root: ParseNode, sdd: SDD) -> DependencyGraph:
         if nd.production is None:
             continue
 
+        # Busca en la SDD la lista de reglas correspondientes para la producción.
         prod_rules = sdd.rules_by_production.get(nd.production, [])
         # Mapa de indice de simbolo en la produccion -> ParseNode:
         # 0 es la cabeza (nd), i >= 1 es el i-esimo hijo (nd.children[i - 1])
         symbol_nodes: dict[int, ParseNode] = {0: nd}
+        # iteramos en los hijos para guardarlos en symbol_nodes, correspondencia de la producción con los nodos
         for idx, child in enumerate(nd.children, start=1):
             symbol_nodes[idx] = child
-
-        for rule in prod_rules:
+        
+        # Regla de la forma (2, "scale")
+        for rule in prod_rules:            
             target_sym_idx, target_attr = rule.target
+            # Busco el indice relativo al Nodo real
             target_node = symbol_nodes[target_sym_idx]
             target_vertex: DepVertex = (target_node.node_id, target_attr)
             _add_vertex(target_vertex)
 
             dep_vertices: list[DepVertex] = []
+            # Recorre cada atributo del que depende la regla (ej. [(1, "lexval"), (0, "scale")])
             for dep_sym_idx, dep_attr in rule.dependencies:
                 dep_node = symbol_nodes[dep_sym_idx]
                 dep_vertex: DepVertex = (dep_node.node_id, dep_attr)
                 _add_vertex(dep_vertex)
-                dep_vertices.append(dep_vertex)
+                # Guarda la lista exacta de vértices concretos en el mismo orden de rule.dependencies
+                # para que luego evaluate_sdd_on_tree sepa de qué nodos leer los valores vals[0], vals[1]
+                dep_vertices.append(dep_vertex) 
                 # Arista dirigida desde el atributo usado hacia el atributo definido
                 edges.append((dep_vertex, target_vertex))
 
@@ -1032,7 +1056,9 @@ def build_dependency_graph(root: ParseNode, sdd: SDD) -> DependencyGraph:
         node_map=node_map,
     )
 
-
+# Implementación del algoritmo de Kahn: Busca las dependencias de cada vertice, los mete en una cola (los de 0 van en ready)
+# luego, saca el vertice de la cola, lo añade al final de order y le resta 1 al contador de dependencias de todos los
+# vertices que esperaban su resultado, cuando alguno llega a 0, entra a la cola
 def topological_sort(dep_graph: DependencyGraph) -> tuple[list[DepVertex], bool]:
     """Calcula un orden topologico del grafo de dependencias (Seccion 5.2.2, pag. 312).
 

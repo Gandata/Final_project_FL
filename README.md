@@ -72,10 +72,18 @@ uv run python main.py --sets
 
 ### 3. Running Automated Examples from the `Examples/` Directory (`--file` Flag)
 
-To avoid typing grammars and test strings manually in the console, you can pass the path to any example file in `Examples/` via `--file <path>` (or `-f <path>`, or directly `<path>`). If no file flag is passed, the program reads from standard console input (`stdin`) as usual:
+To avoid typing grammars and test strings manually in the console, you can pass the path to any `.txt` example file using any of the following flag formats:
+
+- `--file <path>`
+- `-f <path>`
+- `--file=<path>`
+- `<path>` (any `.txt` argument directly)
+
+These can be freely combined with `--sets`, `--sdd`, and `--sdd-circular`. If no file flag is passed, the program reads from standard console input (`stdin`) as usual:
 
 ```bash
 # 1. Own grammar G1 (both LL(1) and SLR(1), tests T, B, and Q)
+uv run python main.py --file Examples/1_GramaticaPropia_LL1_y_SLR1.txt
 uv run python main.py --sets --file Examples/1_GramaticaPropia_LL1_y_SLR1.txt
 
 # 2. Classic arithmetic expressions (SLR(1) only due to left recursion)
@@ -92,7 +100,7 @@ uv run python main.py --sdd --file Examples/5_Evaluacion_SDD_CadenasReporte.txt
 uv run python main.py --sdd-circular --file Examples/5_Evaluacion_SDD_CadenasReporte.txt
 ```
 
-### 3. Reproducing the Official Examples from `docs/sdt_revised.pdf`
+### 4. Reproducing the Official Examples from `docs/sdt_revised.pdf`
 
 **Example 1 (SLR(1) only):**
 ```bash
@@ -142,8 +150,15 @@ Reads strings one per line until an empty line is given (optionally preceded by 
 uv run python main.py --sdd
 ```
 
-Example run with the 5 test strings from Step 6:
+Example run with the 5 test strings from Step 6 (via `--file` or piped `stdin`):
 ```bash
+# Recommended: using the --file flag with Examples/
+uv run python main.py --sdd --file Examples/5_Evaluacion_SDD_CadenasReporte.txt
+
+# Optional: also print First and Follow sets before evaluating the SDD
+uv run python main.py --sdd --sets --file Examples/5_Evaluacion_SDD_CadenasReporte.txt
+
+# Alternative: via piped stdin
 printf "2\n^2+3\n^^3+^2+3\n2+3+2\n2++3\n\n" | uv run python main.py --sdd
 ```
 
@@ -152,6 +167,10 @@ printf "2\n^2+3\n^^3+^2+3\n2+3+2\n2++3\n\n" | uv run python main.py --sdd
 Temporarily modifies one rule in production `S -> B R` (`B.scale = S.val`) to create a circular dependency cycle (`B.scale -> B.val -> S.val -> B.scale`) and verifies that the topological sort detects and reports the cycle:
 
 ```bash
+# Using the --file flag with Examples/
+uv run python main.py --sdd-circular --file Examples/5_Evaluacion_SDD_CadenasReporte.txt
+
+# Alternative: via piped stdin
 printf "2\n\n" | uv run python main.py --sdd-circular
 ```
 Output:
@@ -179,4 +198,4 @@ In compliance with Section 1 (*Academic integrity and responsible use of AI*) an
 - **Purpose of Use**:
   1. Consulting and cross-referencing the exact algorithms and section numbers in Aho et al., *Compilers: Principles, Techniques, and Tools* (2nd Edition), Chapters 4 and 5.
   2. Structuring and verifying the clean standard-library implementation in `main.py` against all input/output rules and edge cases (such as $\varepsilon$-productions in $LR(0)$ items and cycle detection in dependency graphs).
-  3. Building the optional Streamlit/Graphviz interactive visualizer (`visualizer.py`), formatting the LaTeX report (`report.tex`) with TikZ diagrams, and preparing the line-by-line study guide (`exp_code.md`) so that all group members understand and can explain, trace by hand, and modify every line of code during the oral presentation.
+  3. Building the optional Streamlit/Graphviz interactive visualizer (`visualizer.py`), formatting the LaTeX report (`report.tex`) with TikZ diagrams.
